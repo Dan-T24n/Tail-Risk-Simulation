@@ -7,7 +7,7 @@ n = 500;      % #firms
 t = 2000;   % #time horizon (20*months)
 df_m = 3;   % degree of freedom of marginal t-dist
 nu = 5;     % degree of freedom of t-copula
-rho = 0.1;  % pairwise correlation
+rho = 0.5;  % pairwise correlation
 
 % rho_block *todo*  
 
@@ -15,113 +15,106 @@ rho = 0.1;  % pairwise correlation
 
 data = genData(n,t,rho,nu,df_m);
 
+%% test 1 day cross-section
+day = randi(t);
+X = data (day,:);
+Var = 1/length(X)*((X-mean(X))*(X-mean(X))');
+plot(X)
+title(['cross-section return of day ',num2str(day)]);
+xlabel(['Mean = ',num2str(mean(X)),', Variance = ',num2str(Var)]);
+set(gca,'FontSize',15)
+
 %% test month sampling - compute tail risk
 
 %pick 1 random month
 month = randi(t/20);
 idx = month*20-linspace(19,0,20);
 
-%sample daily returns
+% sample daily returns and plot check
 X = data (idx,:);
-
-%% compute Kelly measure
-X = reshape(X,1,[]);    %reshape data into 1 vector
-
-q = quantile(X,.05);    %compute q left tail threshold at 5%
-
-b = round(sqrt(t));
-histogram(X,b,'Normalization','probability')
-hold on
-plot([q q],[0 2/b],'--r')
-hold off
-
-%Y = q - X(X<q);
-%histogram(Y,b,'Normalization','probability');
-
-Y = X(X<q); 
-histogram(Y,b,'Normalization','probability');
-
-Kelly = mean(log(Y/q));
-
-%% compute smooth 
-X = data (idx,:);
-days = size(X,1);
-temp = zeros(days,1);
+X1 = reshape(X',1,[]);
+figure();
+plot(X1)
+title(['Month ',num2str(month),' selected at random']);
+xlabel(['Each day has 500 data points ']);
+set(gca,'FontSize',15)
 
 
-for i = 1 : days
-    Xtemp = X(i,:);
+%% compute tail risk
 
-    q = quantile(Xtemp,.05);    %compute q left tail threshold at 5%
+%compute Kelly measure
+Kelly = CSTR(X);
 
-    Y = Xtemp(Xtemp<q);      %extract the tail
+%compute Smooth measure
+Smooth = SmoothCSTR(X);
 
-    temp(i) = mean(log(Y/q));
-end
+%compute Generalized Pareto params
+[GP_k,GP_sigma] = GP_Pool(X);
 
-kVec = temp;    %careful complex number!
-
-Smooth = mean(kVec);
-
-day = 7;
-x = X(day,:);
-q = quantile(x,.05);
-Y = x(x<q);
-histogram(Y,b,'Normalization','probability');
+%compute GP Smooth params
+%[GPSmooth_k,GPSmooth_sigma] = GP_Smooth(X);
 
 
-%% pool_GP fit  test
+%% Fit CDF function
+
+%fit relative exceedances to power law
+x = reshape(X,1,[]);    %reshape data into 1 vector
+q = quantile(x,.05);    %compute q left tail threshold at 5%
+y = x(x<q)/q;
+
+[F,yi] = ecdf(y); %empirical cumulative function
+cdf_Kelly = CDF_Tail(yi,Kelly);
+cdf_Smooth = CDF_Tail(yi,Smooth);
+
+
+%fit exceedances to GP
+z = q - x(x<q);
+
+[F1,zi] = ecdf(z);
+cdf_GP = gpcdf(zi,GP_k,GP_sigma);
+%cdf_GP_Smooth = gpcdf(zi,GPSmooth_k,GPSmooth_sigma);
+
+figure();
+stairs(yi,F,'r'); %yi is just sorted values of y
+hold on;
+plot(yi,cdf_Kelly,'b-');
+plot(yi,cdf_Smooth,'k-');
+plot(yi,cdf_GP,'c-');   %plotting vs. yi to have same axis (cdf does not changes)
+%plot(yi,cdf_GP_Smooth,'y-');  GP_Smooth is way off
+hold off;
+title(['Fitted cumulative functions']);
+legend('Empirical CDF','Fitted Kelly CDF','Fitted Smooth CDF','Fitted GP CDF','Location','best');
+set(gca,'FontSize',15)
+
+
+%% GP_pool fit test separetly
 
 x = reshape(X,1,[]);
 q = quantile(x,.05);
 y = q - x(x<q);
-histogram(y,b,'Normalization','probability'); 
 
 [paramEsts,paramCI] = gpfit(y);
-GP_kHat      = paramEsts(1)   % "Tail index" parameter - or shape
+GP_kHat      = paramEsts(1);   % "Tail index" parameter - or shape
 sigmaHat  = paramEsts(2);    % scale parameter
-%[nll,acov] = gplike(paramEsts, y);
-%stdErr = sqrt(diag(acov));
-kGP_CI  = paramCI(:,1);
 
 %fit CDF function of GP
 [F,yi] = ecdf(y);
-plot(yi,gpcdf(yi,kHatGP,sigmaHat),'-');
+figure();
+plot(yi,gpcdf(yi,GP_kHat,sigmaHat),'-');
 hold on;
 stairs(yi,F,'r');
 hold off;
-legend('Fitted Generalized Pareto CDF','Empirical CDF')
-
-%% averaging GP
-
-X = data (idx,:);
-days = size(X,1);
-temp = zeros(days,1);
+legend('Fitted Generalized Pareto CDF','Empirical CDF','Location','best')
+set(gca,'FontSize',15)
 
 
-for i = 1 : days
-    Xtemp = X(i,:);
+%% compare fitness - pseudo R2
 
-    q = quantile(Xtemp,.05);    %compute q left tail threshold at 5%
 
-    y = q - Xtemp(Xtemp<q);      %extract the tail
+[pMSE_GP,pR2_GP] = Fitness(cdf_GP,F);
 
-    paramEsts = gpfit(y);
-    
-    temp(i) = paramEsts(1);
-end
+[pMSE_Kelly,pR2_Kelly] = Fitness(cdf_Kelly,F);
 
-GP_kVec = temp;
-GP_kHat_smooth = mean(temp); 
+[pMSE_smooth,pR2_smooth] = Fitness(cdf_Smooth,F);
 
-%% extract prob and curve fitting - in-house estimation
 
-plot(ysort);
-
-%extract frequency
-hh = histogram(y,100,'Normalization','probability');
-counts = hh.BinCounts;
-freq = counts'/sum(counts);
-T = length(counts)/length(y);
-pos = (1:T:length(y));
-y_bin = y(pos);

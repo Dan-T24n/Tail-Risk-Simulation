@@ -19,55 +19,33 @@ data = genData(n,t,rho,nu,df_m);
 month = randi(t/20);
 idx = month*20-linspace(19,0,20);
 
-% sample daily returns
+% sample daily returns and plot check
 X = data (idx,:);
+X1 = reshape(X',1,[]);
+figure();
+plot(X1)
+title(['Month ',num2str(month),' selected at random']);
+xlabel(['Each day has 500 data points ']);
+set(gca,'FontSize',15)
 
 %% compute Kelly measure
-X = reshape(X,1,[]);    %reshape data into 1 vector
+X = data(idx,:);
 
-q = quantile(X,.05);    %compute q left tail threshold at 5%
+Kelly = CSTR(X);
 
-b = round(sqrt(t));
+[F,yi] = ecdf(y);
 
-histogram(X,b,'Normalization','probability')
-hold on
-plot([q q],[0 2/b],'--r')
-hold off
 
-Y = X(X<q); 
-histogram(Y,b,'Normalization','probability');
+%plot(yi,gpcdf(yi,GP_kHat,sigmaHat),'-');
 
-Kelly = mean(log(Y/q));
 
 %% compute smooth 
-X = data (idx,:);
-days = size(X,1);
-temp = zeros(days,1);
+X = data(idx,:);
+
+Smooth = SmoothCSTR(X);
 
 
-for i = 1 : days
-    Xtemp = X(i,:);
-
-    q = quantile(Xtemp,.05);    % compute q left tail threshold at 5%
-
-    Y = Xtemp(Xtemp<q);      % extract the tail
-
-    temp(i) = mean(log(Y/q));
-end
-
-kVec = temp;    % careful complex number!
-
-Smooth = mean(kVec);
-
-% day plot check q too large
-day = 7;
-x = X(day,:);
-q = quantile(x,.05);
-Y = x(x<q);
-histogram(Y,b,'Normalization','probability');
-
-
-%% pool_GP fit  test
+%% GP_poolfit  test
 
 x = reshape(X,1,[]);
 q = quantile(x,.05);
@@ -83,7 +61,7 @@ kGP_CI  = paramCI(:,1);
 
 %fit CDF function of Pool_GP
 [F,yi] = ecdf(y);
-plot(yi,gpcdf(yi,kHatGP,sigmaHat),'-');
+plot(yi,gpcdf(yi,GP_kHat,sigmaHat),'-');
 hold on;
 stairs(yi,F,'r');
 hold off;
@@ -91,7 +69,7 @@ legend('Fitted Generalized Pareto CDF','Empirical CDF')
 
 %% averaging GP
 
-X = data (idx,:);
+
 days = size(X,1);
 temp1 = zeros(days,1);
 temp2 = zeros(days,1);
@@ -110,7 +88,7 @@ for i = 1 : days
     temp2(i) = paramEsts(2);
 end
 
-GP_kVec = temp;
+GP_kVec = temp1;
 GP_kHat_smooth = mean(GP_kVec);
 GP_sigma_smooth = mean(temp2);
 
