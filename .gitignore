@@ -1,0 +1,13 @@
+#ignore data files and draft code
+
+#ignore folders
+data/
+
+#ignore pipenv files
+pipfile.*
+pip*
+
+#ignore environment files
+*.env
+*.DS_Store
+*.json

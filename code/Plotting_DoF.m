@@ -1,0 +1,96 @@
+
+clear; clc;
+
+%% import file
+
+%set folder for import/export
+target = '/Users/macbookpro/Desktop/Google Drive/Smooth Tail Risk RA/coding/figure';
+source = '/Users/macbookpro/Desktop/Google Drive/Smooth Tail Risk RA/coding/data';
+root = pwd;
+
+%set DoF
+Dof=30;
+store = sprintf('DoF=%.0f',Dof);
+
+%set rho
+rho=0.2;
+
+%retrieve path for data file
+name = sprintf('Delta, rho=%.1f, DoF=%.0f',rho,Dof);
+ext = '.csv';
+filename = strcat(name,ext);
+
+path = fullfile(source,store,filename);
+
+Delta = importfile(path);
+clear filename path store name ext;
+
+step = Dof/10;
+k=(step:step:Dof);
+nu = k ;
+df_m = k;
+
+%% 3D plot
+
+
+figure2=figure();
+mesh(df_m,nu,Delta);
+title(['$\rho= $ ' num2str(rho)],'Interpreter','latex')
+xlabel('Marginals DoF $(df_m)$','Interpreter','latex');
+ylabel('Copula DoF $(nu)$','Interpreter','latex');
+view(132,18);
+set(gca,'FontSize',16)
+
+
+%% Color map
+
+%change color map
+c=jet;
+k=0.2;
+
+for i=1:6 %or i = vector indexes  
+     c(i,3)= c(i,3) - k/(i^1.2);
+end
+
+
+figure1=figure();
+colormap(c);
+
+% Create axes
+axes1 = axes('Parent',figure1);
+hold(axes1,'on');
+
+% Create colormap
+pcolor(df_m,nu,Delta)
+title(['$\rho= $ ' num2str(rho)],'Interpreter','latex')
+shading interp;
+
+% Create label
+xlabel('Marginals DoF $(df_m)$','Interpreter','latex','FontSize',16);
+ylabel('Copula DoF $(\nu)$','Interpreter','latex','FontSize',16);
+
+%set limits
+xlim([step Dof])
+ylim([step Dof])
+
+% Set the limits of the colorbar
+bottom = min(min(Delta));
+top  = max(max(Delta));
+
+caxis manual
+caxis([bottom top]);
+grid(axes1,'on');
+
+% Create colorbar
+colorbar('peer',axes1);
+hold off
+set(gca,'FontSize',16)
+
+%export
+name = sprintf('Delta-pMSE, rho=%.1f, DoF=%.0f',rho,Dof);
+ext = '.png';
+filename = strcat(name,ext);
+path = fullfile(target,filename);
+print(path,'-dpng','-r300');
+
+cd(root);
